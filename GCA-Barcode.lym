@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Generate barcode for GCA optical stepper</description>
+ <version/>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text># importing libraries 
+from pya import *
+import sys 
+
+# Create GUI class
+class Dialog(pya.QDialog): 
+
+  # Dialog constructor 
+  def __init__(self, parent = None): 
+      pya.QDialog.__init__(self)
+
+      # setting window title 
+      self.setWindowTitle("GCA Barcode Generator") 
+
+      # setting geometry to the window 
+      self.setGeometry(400, 200, 200, 200) 
+
+      # creating a group box 
+      self.nameLabel = QLabel('Mask Name (10 chars max):')
+      self.dirLabel = QLabel('Mask save location:')
+      self.layerLabel = QLabel('Layer number:')
+      self.formGroupBox = QGroupBox("Barcode Parameters") 
+      vb = pya.QVBoxLayout(self.formGroupBox)
+
+      # creating a line edit 
+      vb.addWidget(self.nameLabel)
+      self.nameLineEdit = QLineEdit("*test1", self.formGroupBox)
+      vb.addWidget(self.nameLineEdit)
+      self.scaleLineEdit = QCheckBox("&amp;Scale 5x", self.formGroupBox)    
+      vb.addWidget(self.scaleLineEdit)
+      self.transLineEdit = QCheckBox("&amp;Position in reticle", self.formGroupBox) 
+      vb.addWidget(self.transLineEdit)
+      
+      self.embedCheckbox = QCheckBox("&amp;Embed barcode in current layout", self.formGroupBox)
+      vb.addWidget(self.embedCheckbox)
+      vb.addWidget(self.layerLabel)
+      self.layerNum = QLineEdit("1", self.formGroupBox)
+      vb.addWidget(self.layerNum)
+      vb.addWidget(self.dirLabel)
+      self.saveDir = QLineEdit("t.GDS", self.formGroupBox)
+      vb.addWidget(self.saveDir)
+
+      #Default config
+      self.transLineEdit.checkState = Qt.Checked
+      self.embedCheckbox.checkState = Qt.Unchecked
+      self.embedCheckbox.setEnabled(False)
+
+      # creating a dialog button for ok and cancel 
+      self.buttonBox = QDialogButtonBox(self)
+      self.ok = self.buttonBox.addButton(QDialogButtonBox.Ok)
+      self.cancel = self.buttonBox.addButton(QDialogButtonBox.Cancel)
+
+      # Add button functionality
+      self.cancel.clicked(lambda button: self.reject())
+      self.ok.clicked(self.genBarcode)
+      
+      #Make GUI update on input
+      self.embedCheckbox.clicked(self.updateGUI)
+
+      # creating a vertical layout 
+      mainLayout = QVBoxLayout() 
+
+      # adding form group box to the layout 
+      mainLayout.addWidget(self.formGroupBox) 
+
+      # adding button box to the layout 
+      mainLayout.addWidget(self.buttonBox) 
+
+      # setting lay out 
+      self.setLayout(mainLayout) 
+      self.updateGUI()
+      
+      #Build error message 
+      self.doneMsg = QErrorMessage(self)
+      self.dialogObj = QMessageBox()
+      self.dialogObj.setWindowTitle("Error")
+      
+      #Next let's define the barcode hash tables
+      self.barcode={' ':[1,5,1,1,1,1],
+      '!':[1,4,1,2,1,1],
+      '"':[1,4,1,1,1,2],
+      '#':[1,3,1,3,1,1],
+      '$':[1,3,1,2,1,2],
+      '%':[1,3,1,1,1,3],
+      '&amp;':[1,3,1,1,3,1],
+      ',':[1,3,2,1,2,1],
+      '(':[1,3,3,1,1,1],
+      ')':[1,2,1,4,1,1],
+      '*':[1,2,1,3,1,2],
+      '+':[1,2,1,2,1,3],
+      '\'':[1,2,1,2,3,1],
+      '-':[1,2,1,1,1,4],
+      '.':[1,2,1,1,3,2],
+      '/':[1,2,2,2,2,1],
+      '0':[1,2,2,1,2,2],
+      '1':[1,2,3,2,1,1],
+      '2':[1,2,3,1,1,2],
+      '3':[1,1,1,5,1,1],
+      '4':[1,1,1,4,1,2],
+      '5':[1,1,1,3,1,3],
+      '6':[1,1,1,3,3,1],
+      '7':[1,1,1,2,1,4],
+      '8':[1,1,1,2,3,2],
+      '9':[1,1,1,1,1,5],
+      ':':[1,1,1,1,3,3],
+      ';':[1,1,1,1,5,1],
+      '&lt;':[1,1,2,3,2,1],
+      '=':[1,1,2,2,2,2],
+      '&gt;':[1,1,2,1,2,3],
+      '?':[1,1,2,1,4,1],
+      '@':[1,1,3,3,1,1],
+      'A':[1,1,3,2,1,2],
+      'B':[1,1,3,1,1,3],
+      'C':[1,1,3,1,3,1],
+      'D':[1,1,4,1,2,1],
+      'E':[1,1,5,1,1,1],
+      'F':[2,3,1,1,2,1],
+      'G':[2,3,2,1,1,1],
+      'H':[2,2,1,2,2,1],
+      'I':[2,2,1,1,2,2],
+      'J':[2,2,2,2,1,1],
+      'K':[2,2,2,1,1,2],
+      'L':[2,1,1,3,2,1],
+      'M':[2,1,1,2,2,2],
+      'N':[2,1,1,1,2,3],
+      'O':[2,1,1,1,4,1],
+      'P':[2,1,2,3,1,1],
+      'Q':[2,1,2,2,1,2],
+      'R':[2,1,2,1,1,3],
+      'S':[2,1,2,1,3,1],
+      'T':[2,1,3,1,2,1],
+      'U':[2,1,4,1,1,1],
+      'V':[3,3,1,1,1,1],
+      'W':[3,2,1,2,1,1],
+      'X':[3,2,1,1,1,2],
+      'Y':[3,1,1,3,1,1],
+      'Z':[3,1,1,2,1,2],
+      '[':[3,1,1,1,1,3],
+      '\\':[3,1,1,1,3,1],
+      ']':[3,1,2,1,2,1],
+      '^':[3,1,3,1,1,1],
+      '_':[3,1,3,1,1,1],
+      'START':[4,1,2,1,1,1],
+      'STOP':[5,1,1,1,1,1],
+      'QUIET':[26.66666666666666666],
+      'SYNC':[1,1,1,1,1,1]}
+      
+      self.numlist = dict(list(enumerate(self.barcode)))
+      self.charlist = {v: k for k, v in self.numlist.items()}
+      
+      #Script variables
+      self.unitLength = 30*1000
+      self.unitHeight=600*1000
+      self.textScale = 600
+      self.textOffset = -600*1000
+      self.xtranslation = 10000 * 1000
+      self.ytranslation = 11100 * 1000
+      
+  #Update GUI
+  def updateGUI(self):
+      embed = self.embedCheckbox.checkState
+      
+      if embed == Qt.Checked:
+        self.layerNum.setEnabled(True)
+        self.saveDir.setEnabled(False)
+      else:
+        self.layerNum.setEnabled(False)
+        self.saveDir.setEnabled(True)
+        
+  # get info method called when form is accepted 
+  def genBarcode(self): 
+      #Set up script variables
+      name = self.nameLineEdit.text.upper()
+      scale5x = self.scaleLineEdit.checkState
+      positionOnMask = self.transLineEdit.checkState
+      embed = self.embedCheckbox.checkState
+      saveDir = self.saveDir.text
+      xpos=0
+      
+      if scale5x == Qt.Checked:
+        self.unitLength = self.unitLength * 5
+        self.unitHeight = self.unitHeight * 5
+        self.textScale = self.textScale * 5
+        self.textOffset = self.textOffset * 5
+        self.xtranslation = self.xtranslation * 5
+        self.ytranslation = self.ytranslation * 5
+
+      #First verify length
+      if len(name) &gt; 10:
+        self.dialogObj.setText("Error:  Name too long.  \nShorten name to 10 charaters or less and try again.")
+        self.dialogObj.open()
+        return 0
+      
+      #Ensure there are no illegal characters
+      name = name.upper()
+      error = False
+      chars = []
+      for ch in name:
+        try:
+          self.barcode[ch]
+        except:
+          error = True
+          chars.append(ch)
+      
+      if error:
+        msg = "Error:  Unallowed characters encountered:"
+        for char in chars:
+          msg = msg + "\n\t" + char
+        self.dialogObj.setText(msg + "\nRemove character and try again.")
+        self.dialogObj.open()
+        return 0
+      
+      #If we're here we can start building the barcode
+      #Create new layout
+      layout = pya.Layout()
+      top = layout.create_cell("BARCODE")
+      l1 = layout.layer(1, 0)
+      
+      #Print barcode intro section
+      xpos = self.printBlock(self.barcode['QUIET'], xpos, top, l1, True)
+      xpos = self.printBlock(self.barcode['SYNC'], xpos, top, l1, False)
+      xpos = self.printBlock(self.barcode['START'], xpos, top, l1, False)
+      
+      #Print name
+      ssum=0
+      name = name.upper()
+      for ch in name:
+        xpos = self.printBlock(self.barcode[ch], xpos, top, l1)
+        ssum = ssum + self.charlist[ch]
+      
+      #Print checksum
+      ssum = ((ssum-1) % 64) + 1
+      xpos = self.printBlock(self.barcode[self.numlist[ssum]], xpos, top, l1)
+      
+      #Print termination section
+      xpos = self.printBlock(self.barcode['STOP'], xpos, top, l1, False)
+      xpos = self.printBlock(self.barcode['SYNC'], xpos, top, l1, True)
+      xpos = self.printBlock(self.barcode['QUIET'], xpos, top, l1, True)
+      
+      #Print name below barcode
+      txt_layer = pya.LayerInfo(1, 0)
+      param  = { "layer": txt_layer, "text": name, "mag": self.textScale }
+      txtcell = layout.create_cell("TEXT", "Basic", param)
+      movement = pya.Vector(xpos/4, self.textOffset)
+      trans = pya.Trans(0, False, movement)
+      top.insert(pya.CellInstArray.new(txtcell.cell_index(), trans))
+      top.flatten(True)
+      
+      #Transform the overall image if necessary
+      if positionOnMask == Qt.Checked:
+        #Mirror the barcode
+        layout.transform(pya.DTrans.M90)
+        xtranslation = self.xtranslation + xpos
+  
+        #Move it to the proper location
+        xtranslation = self.xtranslation - xpos
+        mov = pya.Trans(0, False, self.xtranslation, self.ytranslation)
+        layout.transform(mov)
+      
+      #Write output file
+      if embed == Qt.Unchecked:
+        try:
+          layout.write(saveDir)
+        except:
+          self.dialogObj.setText("Error:  Could not write to file.  \nCheck to see if file is valid and try again.")
+          self.dialogObj.open()
+          return 0         
+      
+      #Let the user know we're done
+      self.doneMsg.showMessage("Done writing barcode")
+
+  #Barcode block insertion function
+  def printBlock(self, sequence, startPos, cell, layer, firstBlockBlack=False):
+      black = firstBlockBlack
+      for unit in sequence:
+        l=unit*self.unitLength
+        
+        if black:
+          cell.shapes(layer).insert(pya.Box(startPos, 0, startPos+l, self.unitHeight))
+        
+        black = not black
+        startPos = startPos+l
+      return startPos
+
+GUI_Klayout = Dialog(pya.Application.instance().main_window())
+GUI_Klayout.exec_()</text>
+</klayout-macro>

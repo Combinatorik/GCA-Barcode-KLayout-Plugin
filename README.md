@@ -1,9 +1,9 @@
 # GCA-Barcode-Plugin-KLayout
-V0.1 of plugin.
+V0.5 of plugin.
 A plugin for KLayout that generates a machine-readable barcode for GCA machines.
 
-To use, import into KLayout macro editor, set your mask name, and run.  It will generate "t.GDS" and store it in "C:\Users\<USER NAME>\AppData\Roaming\KLayout\"
+To use, copy into KLayout macro folder, and run by selecting under "Macros" bar.  Default file location is "C:\Users\<USER NAME>\AppData\Roaming\KLayout\"
 
 Future versions will include:
-  GUI
   Insertion of barcode directly into open GDS file
+  Specification of cell name and layer number barcode is inserted into
