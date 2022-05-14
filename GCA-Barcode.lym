@@ -29,11 +29,12 @@ class Dialog(pya.QDialog):
       self.setWindowTitle("GCA Barcode Generator") 
 
       # setting geometry to the window 
-      self.setGeometry(400, 200, 200, 200) 
+      self.setGeometry(300, 500, 300, 500) 
 
       # creating a group box 
-      self.nameLabel = QLabel('Mask Name (10 chars max):')
+      self.nameLabel = QLabel('Mask Name (1-10 characters):')
       self.dirLabel = QLabel('Mask save location:')
+      self.alignLabel = QLabel('Barcode alignment type:')
       self.layerLabel = QLabel('Layer number:')
       self.formGroupBox = QGroupBox("Barcode Parameters") 
       vb = pya.QVBoxLayout(self.formGroupBox)
@@ -47,6 +48,12 @@ class Dialog(pya.QDialog):
       self.transLineEdit = QCheckBox("&amp;Position in reticle", self.formGroupBox) 
       vb.addWidget(self.transLineEdit)
       
+      vb.addWidget(self.alignLabel)
+      self.standardAlignRadio = QRadioButton("S&amp;tandard", self)
+      vb.addWidget(self.standardAlignRadio)
+      self.offsetAlignRadio = QRadioButton("&amp;Offset", self)
+      vb.addWidget(self.offsetAlignRadio)
+            
       self.embedCheckbox = QCheckBox("&amp;Embed barcode in current layout", self.formGroupBox)
       vb.addWidget(self.embedCheckbox)
       vb.addWidget(self.layerLabel)
@@ -57,6 +64,8 @@ class Dialog(pya.QDialog):
       vb.addWidget(self.saveDir)
 
       #Default config
+      self.standardAlignRadio.toggle()
+      self.scaleLineEdit.checkState = Qt.Checked
       self.transLineEdit.checkState = Qt.Checked
       self.embedCheckbox.checkState = Qt.Unchecked
       self.embedCheckbox.setEnabled(False)
@@ -69,6 +78,7 @@ class Dialog(pya.QDialog):
       # Add button functionality
       self.cancel.clicked(lambda button: self.reject())
       self.ok.clicked(self.genBarcode)
+      self.scaleLineEdit.clicked(self.upsize5x)
       
       #Make GUI update on input
       self.embedCheckbox.clicked(self.updateGUI)
@@ -85,6 +95,7 @@ class Dialog(pya.QDialog):
       # setting lay out 
       self.setLayout(mainLayout) 
       self.updateGUI()
+      #self.upsize5x()
       
       #Build error message 
       self.doneMsg = QErrorMessage(self)
@@ -160,17 +171,20 @@ class Dialog(pya.QDialog):
       'STOP':[5,1,1,1,1,1],
       'QUIET':[26.66666666666666666],
       'SYNC':[1,1,1,1,1,1]}
-      
-      self.numlist = dict(list(enumerate(self.barcode)))
-      self.charlist = {v: k for k, v in self.numlist.items()}
+
+      self.numlist = list(enumerate(self.barcode))
+      self.numlist = [(x+1,y) for x,y in self.numlist]
+      self.numlist = dict(self.numlist)
+      self.charlist = {v: k for k, v in self.numlist.items()}     
       
       #Script variables
-      self.unitLength = 30*1000
-      self.unitHeight=600*1000
-      self.textScale = 600
-      self.textOffset = -600*1000
-      self.xtranslation = 10000 * 1000
-      self.ytranslation = 11100 * 1000
+      self.unitLength = 30*1000*5
+      self.unitHeight=600*1000*5
+      self.textScale = 250*5
+      self.textOffset = -600*1000*5
+      self.xtranslationOffset = 10000 * 1000*5
+      self.xtranslationStandard = 8890*1000*5
+      self.ytranslation = 11100 * 1000*5
       
   #Update GUI
   def updateGUI(self):
@@ -182,7 +196,27 @@ class Dialog(pya.QDialog):
       else:
         self.layerNum.setEnabled(False)
         self.saveDir.setEnabled(True)
-        
+
+  #5x size enlargement
+  def upsize5x(self):
+      enlarge = self.scaleLineEdit.checkState
+      if enlarge == Qt.Checked:
+          self.unitLength = self.unitLength * 5
+          self.unitHeight = self.unitHeight * 5
+          self.textScale = self.textScale * 5
+          self.textOffset = self.textOffset * 5
+          self.xtranslationOffset = self.xtranslationOffset * 5
+          self.xtranslationStandard = self.xtranslationStandard * 5
+          self.ytranslation = self.ytranslation * 5
+      else:
+          self.unitLength = self.unitLength / 5
+          self.unitHeight = self.unitHeight / 5
+          self.textScale = self.textScale / 5
+          self.textOffset = self.textOffset / 5
+          self.xtranslationOffset = self.xtranslationOffset / 5
+          self.xtranslationStandard = self.xtranslationStandard / 5
+          self.ytranslation = self.ytranslation / 5
+
   # get info method called when form is accepted 
   def genBarcode(self): 
       #Set up script variables
@@ -191,17 +225,20 @@ class Dialog(pya.QDialog):
       positionOnMask = self.transLineEdit.checkState
       embed = self.embedCheckbox.checkState
       saveDir = self.saveDir.text
+      sAlign = self.standardAlignRadio.isChecked()
       xpos=0
       
-      if scale5x == Qt.Checked:
-        self.unitLength = self.unitLength * 5
-        self.unitHeight = self.unitHeight * 5
-        self.textScale = self.textScale * 5
-        self.textOffset = self.textOffset * 5
-        self.xtranslation = self.xtranslation * 5
-        self.ytranslation = self.ytranslation * 5
+      if sAlign:
+        self.xtranslation = self.xtranslationStandard
+      else:
+        self.xtranslation = self.xtranslationOffset
 
       #First verify length
+      if len(name) &lt; 1:
+        self.dialogObj.setText("Error:  Name too short.  \nName must be at least 1 character.")
+        self.dialogObj.open()
+        
+        return 0
       if len(name) &gt; 10:
         self.dialogObj.setText("Error:  Name too long.  \nShorten name to 10 charaters or less and try again.")
         self.dialogObj.open()
@@ -257,7 +294,7 @@ class Dialog(pya.QDialog):
       txt_layer = pya.LayerInfo(1, 0)
       param  = { "layer": txt_layer, "text": name, "mag": self.textScale }
       txtcell = layout.create_cell("TEXT", "Basic", param)
-      movement = pya.Vector(xpos/4, self.textOffset)
+      movement = pya.Vector(5*xpos/12, self.textOffset)
       trans = pya.Trans(0, False, movement)
       top.insert(pya.CellInstArray.new(txtcell.cell_index(), trans))
       top.flatten(True)
