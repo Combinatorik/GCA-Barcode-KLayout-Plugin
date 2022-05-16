@@ -29,13 +29,14 @@ class Dialog(pya.QDialog):
       self.setWindowTitle("GCA Barcode Generator") 
 
       # setting geometry to the window 
-      self.setGeometry(300, 500, 300, 500) 
+      self.setGeometry(300, 300, 300, 300) 
 
       # creating a group box 
       self.nameLabel = QLabel('Mask Name (1-10 characters):')
       self.dirLabel = QLabel('Mask save location:')
       self.alignLabel = QLabel('Barcode alignment type:')
       self.layerLabel = QLabel('Layer number:')
+      self.cellLabel = QLabel('Cell name:')
       self.formGroupBox = QGroupBox("Barcode Parameters") 
       vb = pya.QVBoxLayout(self.formGroupBox)
 
@@ -54,11 +55,15 @@ class Dialog(pya.QDialog):
       self.offsetAlignRadio = QRadioButton("&amp;Offset", self)
       vb.addWidget(self.offsetAlignRadio)
             
-      self.embedCheckbox = QCheckBox("&amp;Embed barcode in current layout", self.formGroupBox)
-      vb.addWidget(self.embedCheckbox)
+      vb.addWidget(self.cellLabel)
+      self.cellName = QLineEdit("BARCODE", self.formGroupBox)
+      vb.addWidget(self.cellName)
       vb.addWidget(self.layerLabel)
       self.layerNum = QLineEdit("1", self.formGroupBox)
       vb.addWidget(self.layerNum)
+      
+      self.embedCheckbox = QCheckBox("&amp;Embed barcode in current layout", self.formGroupBox)
+      vb.addWidget(self.embedCheckbox)     
       vb.addWidget(self.dirLabel)
       self.saveDir = QLineEdit("t.GDS", self.formGroupBox)
       vb.addWidget(self.saveDir)
@@ -67,8 +72,7 @@ class Dialog(pya.QDialog):
       self.standardAlignRadio.toggle()
       self.scaleLineEdit.checkState = Qt.Checked
       self.transLineEdit.checkState = Qt.Checked
-      self.embedCheckbox.checkState = Qt.Unchecked
-      self.embedCheckbox.setEnabled(False)
+      self.embedCheckbox.checkState = Qt.Checked
 
       # creating a dialog button for ok and cancel 
       self.buttonBox = QDialogButtonBox(self)
@@ -95,14 +99,13 @@ class Dialog(pya.QDialog):
       # setting lay out 
       self.setLayout(mainLayout) 
       self.updateGUI()
-      #self.upsize5x()
       
-      #Build error message 
+      #Build dialog objects 
       self.doneMsg = QErrorMessage(self)
       self.dialogObj = QMessageBox()
       self.dialogObj.setWindowTitle("Error")
       
-      #Next let's define the barcode hash tables
+      #Script variables
       self.barcode={' ':[1,5,1,1,1,1],
       '!':[1,4,1,2,1,1],
       '"':[1,4,1,1,1,2],
@@ -176,8 +179,8 @@ class Dialog(pya.QDialog):
       self.numlist = [(x+1,y) for x,y in self.numlist]
       self.numlist = dict(self.numlist)
       self.charlist = {v: k for k, v in self.numlist.items()}     
-      
-      #Script variables
+
+      #Position variables
       self.unitLength = 30*1000*5
       self.unitHeight=600*1000*5
       self.textScale = 250*5
@@ -191,10 +194,8 @@ class Dialog(pya.QDialog):
       embed = self.embedCheckbox.checkState
       
       if embed == Qt.Checked:
-        self.layerNum.setEnabled(True)
         self.saveDir.setEnabled(False)
       else:
-        self.layerNum.setEnabled(False)
         self.saveDir.setEnabled(True)
 
   #5x size enlargement
@@ -216,6 +217,10 @@ class Dialog(pya.QDialog):
           self.xtranslationOffset = self.xtranslationOffset / 5
           self.xtranslationStandard = self.xtranslationStandard / 5
           self.ytranslation = self.ytranslation / 5
+          
+  #Get save file name
+  def getSaveFile(self):
+      return QFileDialog.getSaveFileName(self, "Save File Name")
 
   # get info method called when form is accepted 
   def genBarcode(self): 
@@ -224,7 +229,9 @@ class Dialog(pya.QDialog):
       scale5x = self.scaleLineEdit.checkState
       positionOnMask = self.transLineEdit.checkState
       embed = self.embedCheckbox.checkState
-      saveDir = self.saveDir.text
+      layerNumber = self.layerNum.text
+      cellStr = self.cellName.text
+      
       sAlign = self.standardAlignRadio.isChecked()
       xpos=0
       
@@ -232,12 +239,30 @@ class Dialog(pya.QDialog):
         self.xtranslation = self.xtranslationStandard
       else:
         self.xtranslation = self.xtranslationOffset
+      
+      #Check cell name
+      if cellStr == "":
+        self.dialogObj.setText("Error:  Invalid cell name.  \nName must be at least 1 character.")
+        self.dialogObj.open()
+        return 0
+      
+      #Check layer number
+      try:
+        layerNumber = int(layerNumber)
+      except:
+        self.dialogObj.setText("Error:  Invalid layer number.  \nLayer must be a number.")
+        self.dialogObj.open()
+        return 0
+      
+      if layerNumber &lt; 0:
+        self.dialogObj.setText("Error:  Invalid layer number.  \nLayer must be greater than or equal to 0.")
+        self.dialogObj.open()
+        return 0
 
       #First verify length
       if len(name) &lt; 1:
         self.dialogObj.setText("Error:  Name too short.  \nName must be at least 1 character.")
         self.dialogObj.open()
-        
         return 0
       if len(name) &gt; 10:
         self.dialogObj.setText("Error:  Name too long.  \nShorten name to 10 charaters or less and try again.")
@@ -263,17 +288,24 @@ class Dialog(pya.QDialog):
         self.dialogObj.open()
         return 0
       
-      #If we're here we can start building the barcode
-      #Create new layout
-      layout = pya.Layout()
-      top = layout.create_cell("BARCODE")
-      l1 = layout.layer(1, 0)
-      
+      #Print barcode
+      xpos=0
+      if embed == Qt.Checked:
+        #self.printToLayout(name, layerNumber, cellStr)
+        layout = pya.CellView.active().layout
+        top = pya.CellView.active().layout().create_cell(cellStr)
+        l1 = top.layout().layer(layerNumber, 0)
+      else:
+        #self.printToFile(name, layerNumber, cellStr)
+        layout = pya.Layout()
+        top = layout.create_cell(cellStr)
+        l1 = layout.layer(layerNumber, 0)
+
       #Print barcode intro section
       xpos = self.printBlock(self.barcode['QUIET'], xpos, top, l1, True)
       xpos = self.printBlock(self.barcode['SYNC'], xpos, top, l1, False)
       xpos = self.printBlock(self.barcode['START'], xpos, top, l1, False)
-      
+          
       #Print name
       ssum=0
       name = name.upper()
@@ -289,39 +321,46 @@ class Dialog(pya.QDialog):
       xpos = self.printBlock(self.barcode['STOP'], xpos, top, l1, False)
       xpos = self.printBlock(self.barcode['SYNC'], xpos, top, l1, True)
       xpos = self.printBlock(self.barcode['QUIET'], xpos, top, l1, True)
-      
+  
       #Print name below barcode
-      txt_layer = pya.LayerInfo(1, 0)
+      txt_layer = pya.LayerInfo(layerNumber, 0)
       param  = { "layer": txt_layer, "text": name, "mag": self.textScale }
-      txtcell = layout.create_cell("TEXT", "Basic", param)
+      
+      if embed == Qt.Checked:
+        txtcell = top.layout().create_cell("TEXT", "Basic", param)
+      else:
+        txtcell = layout.create_cell("TEXT", "Basic", param)
+        
       movement = pya.Vector(5*xpos/12, self.textOffset)
       trans = pya.Trans(0, False, movement)
       top.insert(pya.CellInstArray.new(txtcell.cell_index(), trans))
       top.flatten(True)
-      
+        
       #Transform the overall image if necessary
+      positionOnMask = self.transLineEdit.checkState
       if positionOnMask == Qt.Checked:
         #Mirror the barcode
-        layout.transform(pya.DTrans.M90)
+        top.transform(pya.DTrans.M90)
         xtranslation = self.xtranslation + xpos
   
         #Move it to the proper location
         xtranslation = self.xtranslation - xpos
         mov = pya.Trans(0, False, self.xtranslation, self.ytranslation)
-        layout.transform(mov)
-      
-      #Write output file
+        top.transform(mov)
+        
+      #Write output file if necessary
       if embed == Qt.Unchecked:
+        saveDir = self.saveDir.text
         try:
           layout.write(saveDir)
         except:
           self.dialogObj.setText("Error:  Could not write to file.  \nCheck to see if file is valid and try again.")
           self.dialogObj.open()
-          return 0         
-      
+          return 0
+            
       #Let the user know we're done
       self.doneMsg.showMessage("Done writing barcode")
-
+          
   #Barcode block insertion function
   def printBlock(self, sequence, startPos, cell, layer, firstBlockBlack=False):
       black = firstBlockBlack
@@ -334,7 +373,20 @@ class Dialog(pya.QDialog):
         black = not black
         startPos = startPos+l
       return startPos
-
+      
+  def printChecksum(self, name, xpos, cell, layer):
+      #calc checksum
+      ssum=0
+      name = name.upper()
+      for ch in name:
+        ssum = ssum + self.charlist[ch]
+      
+      #Print checksum
+      ssum = ((ssum-1) % 64) + 1
+      print(ssum)
+      print(layer)
+      xpos = self.printBlock(self.barcode[self.numlist[ssum]], xpos, cell, layer)
+      
 GUI_Klayout = Dialog(pya.Application.instance().main_window())
 GUI_Klayout.exec_()</text>
 </klayout-macro>
