@@ -293,7 +293,14 @@ class Dialog(pya.QDialog):
       if embed == Qt.Checked:
         #self.printToLayout(name, layerNumber, cellStr)
         layout = pya.CellView.active().layout
-        top = pya.CellView.active().layout().create_cell(cellStr)
+
+        try:
+          top = pya.CellView.active().layout().create_cell(cellStr)
+        except:
+          self.dialogObj.setText("Error:  no layout open.")
+          self.dialogObj.open()
+          return 0
+          
         l1 = top.layout().layer(layerNumber, 0)
       else:
         #self.printToFile(name, layerNumber, cellStr)
