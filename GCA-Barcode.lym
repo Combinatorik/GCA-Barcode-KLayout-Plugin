@@ -217,10 +217,6 @@ class Dialog(pya.QDialog):
           self.xtranslationOffset = self.xtranslationOffset / 5
           self.xtranslationStandard = self.xtranslationStandard / 5
           self.ytranslation = self.ytranslation / 5
-          
-  #Get save file name
-  def getSaveFile(self):
-      return QFileDialog.getSaveFileName(self, "Save File Name")
 
   # get info method called when form is accepted 
   def genBarcode(self): 
@@ -380,19 +376,6 @@ class Dialog(pya.QDialog):
         black = not black
         startPos = startPos+l
       return startPos
-      
-  def printChecksum(self, name, xpos, cell, layer):
-      #calc checksum
-      ssum=0
-      name = name.upper()
-      for ch in name:
-        ssum = ssum + self.charlist[ch]
-      
-      #Print checksum
-      ssum = ((ssum-1) % 64) + 1
-      print(ssum)
-      print(layer)
-      xpos = self.printBlock(self.barcode[self.numlist[ssum]], xpos, cell, layer)
       
 GUI_Klayout = Dialog(pya.Application.instance().main_window())
 GUI_Klayout.exec_()</text>
