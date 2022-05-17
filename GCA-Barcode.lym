@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <klayout-macro>
  <description>Generate barcode for GCA optical stepper</description>
- <version/>
+ <version>0.8</version>
  <category>pymacros</category>
  <prolog/>
  <epilog/>
